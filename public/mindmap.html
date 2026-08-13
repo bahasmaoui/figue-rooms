@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>rooms. — mindmap</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>%F0%9F%93%B7</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/rooms.css" />
+</head>
+<body>
+<div class="wrap mindmap-wrap">
+  <div class="brand" id="room-title">📷 rooms<span class="dot">.</span></div>
+  <a class="mindmap-link" id="back-link" href="#">← Back to the room</a>
+
+  <div class="card" id="loading-card">
+    <p class="hint" id="loading-text">Waking up the room… this can take up to a minute if it's been quiet for a while.</p>
+  </div>
+
+  <div class="card hidden" id="notfound-card">
+    <h1>Room not found</h1>
+    <p class="hint">Double-check the link your friend sent you.</p>
+  </div>
+
+  <div class="card hidden" id="graph-card">
+    <h1 id="graph-title">Who's connected</h1>
+    <p class="hint" id="graph-hint"></p>
+    <svg class="mindmap-canvas" id="mindmap-svg" viewBox="0 0 600 450" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <radialGradient id="mindmap-node-gradient" cx="35%" cy="30%" r="75%">
+          <stop offset="0%" stop-color="#8fcbff" />
+          <stop offset="100%" stop-color="#2f8fe0" />
+        </radialGradient>
+      </defs>
+      <g id="mindmap-edges"></g>
+      <g id="mindmap-nodes"></g>
+    </svg>
+    <p class="mindmap-empty-hint hidden" id="mindmap-empty-hint">Nobody's tagged anyone as a roomate yet — connections will show up here once people do.</p>
+  </div>
+</div>
+
+<div class="mindmap-modal-backdrop hidden" id="modal-backdrop">
+  <div class="mindmap-modal">
+    <div class="mindmap-modal-header">
+      <h1 id="modal-title"></h1>
+      <button class="mindmap-modal-close" id="modal-close" type="button" aria-label="Close">✕</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script src="/mindmap.js"></script>
+</body>
+</html>

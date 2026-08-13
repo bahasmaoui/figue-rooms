@@ -76,6 +76,7 @@ function isDeveloped(room) {
 
 // ---------- Page routes (must precede express.static so /r/:code isn't 404'd as a missing directory) ----------
 app.get("/create", (req, res) => res.sendFile(path.join(__dirname, "public", "create.html")));
+app.get("/r/:code/mindmap", (req, res) => res.sendFile(path.join(__dirname, "public", "mindmap.html")));
 app.get("/r/:code", (req, res) => res.sendFile(path.join(__dirname, "public", "room.html")));
 
 app.use(express.static(path.join(__dirname, "public")));
@@ -124,6 +125,40 @@ app.get("/api/rooms/:code", async (req, res) => {
     developed: isDeveloped(room),
     postCount: count || 0,
   });
+});
+
+// ---------- Joining (public) ----------
+// Registers a display name against this room so the "tag a roomate" picker
+// and the mindmap have someone to show, independent of whether that person
+// has posted anything yet. Names only - never post content - so this is
+// fine to expose while the room's still sealed.
+app.post("/api/rooms/:code/join", async (req, res) => {
+  const room = await getRoomByCode(req.params.code);
+  if (!room) return res.status(404).json({ error: "Room not found." });
+
+  const displayName = (req.body.displayName || "").trim().slice(0, 40);
+  if (!displayName) return res.status(400).json({ error: "Enter a display name first." });
+
+  const { error } = await supabase
+    .from("participants")
+    .upsert({ room_id: room.id, display_name: displayName }, { onConflict: "room_id,display_name", ignoreDuplicates: true });
+  if (error) return res.status(500).json({ error: "Couldn't join the room." });
+
+  res.status(201).json({ ok: true });
+});
+
+app.get("/api/rooms/:code/participants", async (req, res) => {
+  const room = await getRoomByCode(req.params.code);
+  if (!room) return res.status(404).json({ error: "Room not found." });
+
+  const { data, error } = await supabase
+    .from("participants")
+    .select("display_name")
+    .eq("room_id", room.id)
+    .order("joined_at", { ascending: true });
+  if (error) return res.status(500).json({ error: "Couldn't load participants." });
+
+  res.json({ names: data.map((p) => p.display_name) });
 });
 
 // ---------- Post into a room (public, blind) ----------
@@ -236,6 +271,31 @@ function storagePathFromUrl(url) {
   return idx === -1 ? null : decodeURIComponent(url.slice(idx + marker.length));
 }
 
+// roomateTags arrives as a JSON-encoded array string (one plain form field,
+// works the same whether the request is multipart or not). Never trust it
+// blindly: cap the count and length of each name, drop empties/dupes, and
+// never let someone tag themselves as their own roomate.
+function parseRoomateTags(raw, authorName) {
+  let names;
+  try {
+    names = JSON.parse(raw || "[]");
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(names)) return [];
+
+  const seen = new Set();
+  const out = [];
+  for (const n of names) {
+    const name = String(n || "").trim().slice(0, 40);
+    if (!name || name === authorName || seen.has(name)) continue;
+    seen.add(name);
+    out.push(name);
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
 app.post("/api/rooms/:code/posts", (req, res) => {
   // multer invokes this callback directly (not as a chained Express
   // middleware), so Express never gets a chance to catch a rejection from
@@ -260,15 +320,26 @@ app.post("/api/rooms/:code/posts", (req, res) => {
         return res.status(400).json({ error: "Unknown post type." });
       }
 
-      const post = { room_id: room.id, author_name: authorName, type };
+      const post = {
+        room_id: room.id,
+        author_name: authorName,
+        type,
+        roomate_tags: parseRoomateTags(req.body.roomateTags, authorName),
+      };
+      const postDate = (req.body.postDate || "").trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(postDate)) post.post_date = postDate;
 
       if (type === "note") {
         post.title = (req.body.title || "").trim().slice(0, 120);
         post.content_text = (req.body.contentText || "").trim().slice(0, 4000);
         const videoFile = req.files?.video?.[0];
         if (videoFile) post.video_url = await uploadVideoToBucket(room.id, videoFile);
-        if (!post.content_text && !post.video_url) {
-          return res.status(400).json({ error: "Write something or attach a video." });
+        // The mobile story flow captures a photo instead of a video - a
+        // "note" post can carry either (or neither, if it's text-only).
+        const imageFile = req.files?.image?.[0];
+        if (imageFile) post.image_url = await uploadImageToBucket(room.id, imageFile);
+        if (!post.content_text && !post.video_url && !post.image_url) {
+          return res.status(400).json({ error: "Write something, or attach a photo/video." });
         }
       } else if (type === "drawing") {
         const imageFile = req.files?.image?.[0];
@@ -332,6 +403,8 @@ function mapPost(p) {
     spotifyUrl: p.spotify_url,
     embedUrl: p.embed_url,
     lyric: p.lyric,
+    roomateTags: p.roomate_tags || [],
+    postDate: p.post_date,
     createdAt: p.created_at,
   };
 }
@@ -373,6 +446,60 @@ app.delete("/api/admin/rooms/:code", requireAdmin, async (req, res) => {
   if (error) return res.status(500).json({ error: "Couldn't delete the room." });
 
   res.json({ ok: true, deletedPosts: (posts || []).length, deletedFiles: paths.length });
+});
+
+// ---------- Mindmap: who's connected to who, via shared Roomate tags ----------
+// Available whether the room is open or developed - it only reveals the
+// *shape* of connections (names + how many posts link a pair), never post
+// content, so it can't spoil the reveal. Post IDs (used to look up the
+// actual posts behind a connection) are only included once developed.
+app.get("/api/rooms/:code/mindmap", async (req, res) => {
+  const room = await getRoomByCode(req.params.code);
+  if (!room) return res.status(404).json({ error: "Room not found." });
+  const developed = isDeveloped(room);
+
+  const [{ data: participants, error: pErr }, { data: posts, error: postErr }] = await Promise.all([
+    supabase.from("participants").select("display_name").eq("room_id", room.id),
+    supabase.from("posts").select("id, author_name, roomate_tags").eq("room_id", room.id),
+  ]);
+  if (pErr || postErr) return res.status(500).json({ error: "Couldn't build the mindmap." });
+
+  const nodeNames = new Set((participants || []).map((p) => p.display_name));
+  const nodePosts = new Map(); // name -> Set(postId)
+  const edgeMap = new Map(); // "A||B" (sorted) -> { a, b, weight, postIds }
+
+  for (const post of posts || []) {
+    const group = Array.from(new Set([post.author_name, ...(post.roomate_tags || [])].filter(Boolean)));
+    for (const name of group) {
+      nodeNames.add(name);
+      if (!nodePosts.has(name)) nodePosts.set(name, new Set());
+      nodePosts.get(name).add(post.id);
+    }
+    for (let i = 0; i < group.length; i++) {
+      for (let j = i + 1; j < group.length; j++) {
+        const [a, b] = [group[i], group[j]].sort();
+        const key = `${a}||${b}`;
+        if (!edgeMap.has(key)) edgeMap.set(key, { a, b, weight: 0, postIds: [] });
+        const edge = edgeMap.get(key);
+        edge.weight += 1;
+        edge.postIds.push(post.id);
+      }
+    }
+  }
+
+  const nodes = Array.from(nodeNames).map((name) => ({
+    name,
+    postCount: nodePosts.get(name)?.size || 0,
+    postIds: developed ? Array.from(nodePosts.get(name) || []) : undefined,
+  }));
+  const edges = Array.from(edgeMap.values()).map((e) => ({
+    a: e.a,
+    b: e.b,
+    weight: e.weight,
+    postIds: developed ? e.postIds : undefined,
+  }));
+
+  res.json({ name: room.name, developed, nodes, edges });
 });
 
 // Supabase free projects auto-pause after 7 days with no database activity,

@@ -25,11 +25,26 @@ create table if not exists posts (
   spotify_url text,
   embed_url text,
   lyric text,
+  roomate_tags text[] not null default '{}',
+  post_date date,
   created_at timestamptz not null default now()
+);
+
+-- Who's joined a room so far (display name only, remembered client-side -
+-- this table just lets the server offer "tag a roomate" and the mindmap
+-- without needing accounts). Safe to expose while a room is still open:
+-- it's names only, never post content.
+create table if not exists participants (
+  id uuid primary key default gen_random_uuid(),
+  room_id uuid not null references rooms(id) on delete cascade,
+  display_name text not null,
+  joined_at timestamptz not null default now(),
+  unique (room_id, display_name)
 );
 
 create index if not exists posts_room_id_idx on posts (room_id);
 create index if not exists rooms_invite_code_idx on rooms (invite_code);
+create index if not exists participants_room_id_idx on participants (room_id);
 
 -- Lock every table down at the database level. The backend talks to Supabase
 -- using the service role key, which bypasses RLS entirely - so with RLS on
@@ -38,3 +53,4 @@ create index if not exists rooms_invite_code_idx on rooms (invite_code);
 -- this is a free, no-downside second lock on the door).
 alter table rooms enable row level security;
 alter table posts enable row level security;
+alter table participants enable row level security;

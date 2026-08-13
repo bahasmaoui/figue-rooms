@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>rooms.</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>%F0%9F%93%B7</text></svg>" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="/rooms.css" />
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="page-wrap">
   <div class="brand" id="room-title">📷 rooms<span class="dot">.</span></div>
 
   <div class="card" id="loading-card">
@@ -31,7 +31,17 @@
     <p class="error-msg" id="name-error"></p>
   </div>
 
-  <div class="card hidden" id="composer-card">
+  <a class="mindmap-link hidden" id="mindmap-link" href="#">🔗 See who's connected</a>
+
+  <!-- ---------- Mobile: tap to open the full-screen story flow ---------- -->
+  <div class="card hidden mobile-only" id="mobile-composer-card">
+    <h1>Add to the roll</h1>
+    <p class="hint" id="mobile-composer-hint"></p>
+    <button class="btn btn-amber" id="mobile-open-story" type="button">📷 Add to the roll</button>
+  </div>
+
+  <!-- ---------- Desktop composer (unchanged content tabs) ---------- -->
+  <div class="card hidden desktop-only" id="composer-card">
     <h1 id="composer-room-title">Add to the roll</h1>
     <p class="hint" id="composer-hint"></p>
 
@@ -68,8 +78,19 @@
       <textarea id="song-lyric" maxlength="240" placeholder="A lyric that stuck with you… (optional)" style="margin-top:10px; min-height:60px;"></textarea>
     </div>
 
-    <button class="btn btn-amber" id="post-submit" type="button">Add to the roll</button>
+    <button class="btn btn-amber" id="composer-next" type="button">Next →</button>
     <p class="error-msg" id="composer-error"></p>
+  </div>
+
+  <!-- ---------- Roomate tagging step: shared by desktop composer and mobile story flow ---------- -->
+  <div class="card hidden" id="roomate-step-card">
+    <h1>Tag your roomates</h1>
+    <p class="hint">Anyone else here for this one? Totally optional.</p>
+    <div class="roomate-list" id="roomate-list"></div>
+    <p class="status-msg" id="roomate-empty-hint">Nobody else has joined yet - you can still post without tagging anyone.</p>
+    <button class="btn btn-amber" id="roomate-post-submit" type="button">Add to the roll</button>
+    <button class="btn btn-ghost" id="roomate-back" type="button">← Back</button>
+    <p class="error-msg" id="roomate-error"></p>
   </div>
 
   <div class="card hidden" id="confirm-card">
@@ -89,6 +110,52 @@
   </div>
 
   <div id="archive-list"></div>
+</div>
+
+<!-- ---------- Mobile story flow: full-screen capture -> details -> roomates -> post ---------- -->
+<div class="story-flow hidden" id="story-flow">
+  <div class="story-step" data-step="capture" id="story-step-capture">
+    <video id="story-camera" autoplay muted playsinline></video>
+    <img id="story-photo-preview" class="hidden" alt="captured photo" />
+    <video id="story-video-preview" class="hidden" controls playsinline></video>
+
+    <div class="story-topbar">
+      <button class="story-icon-btn" id="story-close" type="button" aria-label="Close">✕</button>
+      <div class="story-mode-toggle" id="story-mode-toggle">
+        <button data-mode="photo" class="active" type="button">Photo</button>
+        <button data-mode="video" type="button">Video</button>
+      </div>
+      <button class="story-icon-btn" id="story-flip-camera" type="button" aria-label="Flip camera">🔄</button>
+    </div>
+
+    <span class="story-rec-timer hidden" id="story-rec-timer">● 0s</span>
+    <p class="story-error hidden" id="story-camera-error"></p>
+
+    <div class="story-bottombar">
+      <button class="story-shutter" id="story-shutter" type="button" aria-label="Capture"></button>
+      <div class="story-review-actions hidden" id="story-review-actions">
+        <button class="btn btn-ghost" id="story-retake" type="button">Retake</button>
+        <button class="btn btn-amber" id="story-next" type="button" style="margin-top:0;">Next →</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="story-step hidden" data-step="details" id="story-step-details">
+    <div class="story-panel-body">
+      <h1>Add details</h1>
+      <label for="story-title">Title</label>
+      <input type="text" id="story-title" maxlength="120" placeholder="Give it a title" />
+      <label for="story-desc">Description</label>
+      <textarea id="story-desc" maxlength="4000" placeholder="Optional…"></textarea>
+      <label for="story-date">Date</label>
+      <input type="date" id="story-date" />
+      <p class="error-msg" id="story-details-error"></p>
+    </div>
+    <div class="story-nav">
+      <button class="btn btn-ghost" id="story-back-to-capture" type="button">← Back</button>
+      <button class="btn btn-amber" id="story-next-to-roomates" type="button">Next →</button>
+    </div>
+  </div>
 </div>
 
 <script src="/room.js"></script>

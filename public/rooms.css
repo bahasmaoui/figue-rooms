@@ -279,5 +279,290 @@ video.cam-preview {
   border-left: 3px solid var(--aqua-blue);
   padding-left: 10px;
 }
+.post-date-label { color: var(--ink-soft); }
+.post-roomates {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin: 10px 0 0;
+}
 
 a.plain { color: var(--aqua-blue-deep); }
+
+/* ---------- Responsive ---------- */
+/* Below this width, the composer is a "tap to open the camera" card that
+   launches the full-screen story flow, instead of the tabbed desktop
+   composer - see .desktop-only / .mobile-only below. Kept as a CSS
+   breakpoint rather than a one-time JS check so rotating a tablet or
+   resizing a window mid-session just works. */
+.desktop-only { display: block; }
+.mobile-only { display: none; }
+@media (max-width: 700px) {
+  .desktop-only { display: none; }
+  .mobile-only { display: block; }
+}
+
+@media (max-width: 480px) {
+  body { padding: 20px 12px 40px; }
+  .card { padding: 18px 16px 20px; }
+  h1 { font-size: 17px; }
+  .brand { font-size: 21px; margin-bottom: 16px; }
+  .post-meta { flex-direction: column; align-items: flex-start; gap: 2px; }
+}
+
+/* ---------- Mindmap link ---------- */
+.mindmap-link {
+  display: block;
+  text-align: center;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--aqua-blue-deep);
+  text-decoration: none;
+  margin-bottom: 18px;
+}
+.mindmap-link:hover { text-decoration: underline; }
+
+/* ---------- Roomate tagging ---------- */
+.roomate-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.roomate-chip {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: var(--border-w) solid var(--chrome-border);
+  background: #fdfdfd;
+  color: var(--chrome-text);
+  cursor: pointer;
+}
+.roomate-chip.selected {
+  background: linear-gradient(180deg, var(--aqua-blue-light), var(--aqua-blue));
+  border-color: #1a5fa8;
+  color: #fff;
+}
+#roomate-back { margin-top: 10px; }
+
+/* ---------- Mobile story-flow: full-screen capture -> details -> roomates -> post ---------- */
+.story-flow {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 100;
+  color: #fff;
+}
+
+.story-step { position: absolute; inset: 0; display: flex; flex-direction: column; }
+#story-step-capture { padding: 0; }
+
+#story-camera, #story-video-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+}
+#story-photo-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.story-topbar {
+  position: absolute;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  z-index: 2;
+}
+.story-icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,0.45);
+  color: #fff;
+  font-size: 17px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.story-mode-toggle {
+  display: flex;
+  gap: 4px;
+  background: rgba(0,0,0,0.45);
+  border-radius: 999px;
+  padding: 4px;
+}
+.story-mode-toggle button {
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.8);
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 600;
+  font-size: 12.5px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.story-mode-toggle button.active { background: #fff; color: #111; }
+
+.story-rec-timer {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 64px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--aqua-red);
+  color: #fff;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  z-index: 2;
+}
+
+.story-error {
+  position: absolute;
+  top: 45%;
+  left: 20px;
+  right: 20px;
+  text-align: center;
+  color: #fff;
+  font-size: 14px;
+  z-index: 2;
+}
+
+.story-bottombar {
+  position: absolute;
+  bottom: env(safe-area-inset-bottom, 0px);
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 20px calc(env(safe-area-inset-bottom, 0px) + 30px);
+  z-index: 2;
+}
+.story-shutter {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #fff;
+  border: 4px solid rgba(255,255,255,0.5);
+  cursor: pointer;
+}
+.story-shutter.recording { background: var(--aqua-red); }
+.story-review-actions {
+  display: flex;
+  gap: 14px;
+  width: 100%;
+  max-width: 340px;
+}
+.story-review-actions .btn { margin-top: 0; }
+
+.story-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: calc(env(safe-area-inset-top, 0px) + 24px) 22px 20px;
+}
+.story-panel-body h1 { color: #fff; }
+.story-panel-body label { color: rgba(255,255,255,0.7); }
+.story-panel-body input, .story-panel-body textarea {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.35);
+  color: #fff;
+}
+.story-panel-body input::placeholder, .story-panel-body textarea::placeholder { color: rgba(255,255,255,0.4); }
+.story-panel-body .roomate-chip { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.35); color: #fff; }
+.story-panel-body .status-msg { color: rgba(255,255,255,0.6); }
+
+.story-nav {
+  display: flex;
+  gap: 10px;
+  padding: 14px 22px calc(env(safe-area-inset-bottom, 0px) + 18px);
+}
+.story-nav .btn { margin-top: 0; }
+.story-nav .btn-ghost { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.35); color: #fff; }
+
+/* ---------- Mindmap graph ---------- */
+.mindmap-wrap { width: 100%; max-width: 720px; }
+.mindmap-canvas {
+  width: 100%;
+  aspect-ratio: 4/3;
+  background: var(--card-bg);
+  border: var(--card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow);
+  touch-action: none;
+  cursor: grab;
+}
+.mindmap-edge { stroke: var(--chrome-border); }
+.mindmap-edge.clickable { cursor: pointer; }
+.mindmap-edge.clickable:hover { stroke: var(--aqua-blue); }
+.mindmap-node-circle {
+  fill: url(#mindmap-node-gradient);
+  stroke: #1a5fa8;
+  stroke-width: 1.5;
+  cursor: pointer;
+}
+.mindmap-node-circle:hover { filter: brightness(1.08); }
+.mindmap-node-label {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  fill: var(--ink);
+  pointer-events: none;
+  text-anchor: middle;
+}
+.mindmap-empty-hint { text-align: center; color: var(--ink-soft); font-size: 13px; padding: 40px 20px; }
+
+.mindmap-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20,22,26,0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 200;
+}
+@media (min-width: 640px) {
+  .mindmap-modal-backdrop { align-items: center; }
+}
+.mindmap-modal {
+  background: var(--card-bg);
+  border-radius: var(--radius) var(--radius) 0 0;
+  max-width: 480px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 20px;
+}
+@media (min-width: 640px) {
+  .mindmap-modal { border-radius: var(--radius); }
+}
+.mindmap-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.mindmap-modal-close {
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--ink-soft);
+}
