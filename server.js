@@ -356,7 +356,16 @@ app.delete("/api/admin/rooms/:code", requireAdmin, async (req, res) => {
 // enough to reset that clock, for free, so a quiet room doesn't quietly break.
 app.get("/api/health", async (req, res) => {
   const { error } = await supabase.from("rooms").select("id", { head: true, count: "exact" });
-  res.status(error ? 500 : 200).json({ ok: !error, time: new Date().toISOString() });
+
+  let ffmpeg = { ok: false };
+  try {
+    await runFfmpeg(["-version"]);
+    ffmpeg = { ok: true, path: ffmpegPath };
+  } catch (err) {
+    ffmpeg = { ok: false, path: ffmpegPath, error: err.message.slice(0, 300) };
+  }
+
+  res.status(error ? 500 : 200).json({ ok: !error, time: new Date().toISOString(), ffmpeg });
 });
 
 async function getRoomByCode(code) {
