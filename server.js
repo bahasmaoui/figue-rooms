@@ -382,31 +382,7 @@ app.delete("/api/admin/rooms/:code", requireAdmin, async (req, res) => {
 // enough to reset that clock, for free, so a quiet room doesn't quietly break.
 app.get("/api/health", async (req, res) => {
   const { error } = await supabase.from("rooms").select("id", { head: true, count: "exact" });
-
-  let ffmpegVersion = { ok: false };
-  try {
-    await runFfmpeg(["-version"]);
-    ffmpegVersion = { ok: true, path: ffmpegPath };
-  } catch (err) {
-    ffmpegVersion = { ok: false, path: ffmpegPath, error: err.message.slice(0, 300) };
-  }
-
-  // Exercises the exact same temp-file-write -> ffmpeg -> temp-file-read path
-  // that a real video post uses, so a failure here reproduces the real bug
-  // instead of just confirming the ffmpeg binary itself can run.
-  let compressTest = { ok: false };
-  try {
-    const synthPath = path.join(os.tmpdir(), `${crypto.randomUUID()}-synth.mp4`);
-    await runFfmpeg(["-y", "-f", "lavfi", "-i", "testsrc=duration=1:size=320x240:rate=10", "-c:v", "libx264", synthPath]);
-    const inputBuf = await fs.readFile(synthPath);
-    await fs.rm(synthPath, { force: true });
-    const outputBuf = await compressVideo(inputBuf);
-    compressTest = { ok: true, inputBytes: inputBuf.length, outputBytes: outputBuf.length };
-  } catch (err) {
-    compressTest = { ok: false, error: (err.message || String(err)).slice(0, 500) };
-  }
-
-  res.status(error ? 500 : 200).json({ ok: !error, time: new Date().toISOString(), ffmpegVersion, compressTest });
+  res.status(error ? 500 : 200).json({ ok: !error, time: new Date().toISOString() });
 });
 
 async function getRoomByCode(code) {
