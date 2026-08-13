@@ -32,6 +32,17 @@ const supabase = createClient(
 // failures here (bucket already exists, or creds aren't set up yet).
 supabase.storage.createBucket(MEDIA_BUCKET, { public: true }).catch(() => {});
 
+// Express 4 (unlike 5) doesn't catch promise rejections from async route
+// handlers on its own, and this app has several - a single unexpected
+// throw (a flaky network call, an unusual Supabase response) would
+// otherwise become an unhandled rejection, which crashes the whole
+// process on modern Node and takes the app down for every other room
+// until Render restarts it. This is the last-resort backstop: log it,
+// keep serving everyone else. It's not a substitute for the try/catch in
+// each handler, just insurance against the ones that get missed.
+process.on("unhandledRejection", (err) => console.error("Unhandled rejection:", err));
+process.on("uncaughtException", (err) => console.error("Uncaught exception:", err));
+
 const app = express();
 // Render (and most PaaS hosts) terminate TLS at the edge and proxy to the
 // app over plain HTTP - without this, req.protocol always reads "http",
@@ -218,25 +229,31 @@ function storagePathFromUrl(url) {
 }
 
 app.post("/api/rooms/:code/posts", (req, res) => {
+  // multer invokes this callback directly (not as a chained Express
+  // middleware), so Express never gets a chance to catch a rejection from
+  // it - an async callback here that throws outside its own try/catch
+  // becomes an unhandled promise rejection, which crashes the whole
+  // process on modern Node. Everything below must funnel through this one
+  // try/catch so that can never happen, no matter which line fails.
   upload(req, res, async (uploadErr) => {
-    if (uploadErr) return res.status(400).json({ error: "That file was too big or unreadable." });
-
-    const room = await getRoomByCode(req.params.code);
-    if (!room) return res.status(404).json({ error: "Room not found." });
-    if (isDeveloped(room)) {
-      return res.status(403).json({ error: "This roll has already developed - it's not accepting new posts." });
-    }
-
-    const authorName = (req.body.authorName || "").trim().slice(0, 40);
-    const type = req.body.type;
-    if (!authorName) return res.status(400).json({ error: "Enter a display name first." });
-    if (!["note", "drawing", "song"].includes(type)) {
-      return res.status(400).json({ error: "Unknown post type." });
-    }
-
-    const post = { room_id: room.id, author_name: authorName, type };
-
     try {
+      if (uploadErr) return res.status(400).json({ error: "That file was too big or unreadable." });
+
+      const room = await getRoomByCode(req.params.code);
+      if (!room) return res.status(404).json({ error: "Room not found." });
+      if (isDeveloped(room)) {
+        return res.status(403).json({ error: "This roll has already developed - it's not accepting new posts." });
+      }
+
+      const authorName = (req.body.authorName || "").trim().slice(0, 40);
+      const type = req.body.type;
+      if (!authorName) return res.status(400).json({ error: "Enter a display name first." });
+      if (!["note", "drawing", "song"].includes(type)) {
+        return res.status(400).json({ error: "Unknown post type." });
+      }
+
+      const post = { room_id: room.id, author_name: authorName, type };
+
       if (type === "note") {
         post.title = (req.body.title || "").trim().slice(0, 120);
         post.content_text = (req.body.contentText || "").trim().slice(0, 4000);
@@ -258,19 +275,20 @@ app.post("/api/rooms/:code/posts", (req, res) => {
         post.caption = (req.body.caption || "").trim().slice(0, 160);
         post.lyric = (req.body.lyric || "").trim().slice(0, 240);
       }
-    } catch {
-      return res.status(500).json({ error: "Couldn't store that file - try again." });
+
+      const { count: existingCount } = await supabase
+        .from("posts")
+        .select("id", { count: "exact", head: true })
+        .eq("room_id", room.id);
+
+      const { error } = await supabase.from("posts").insert(post);
+      if (error) return res.status(500).json({ error: "Couldn't save that post." });
+
+      res.status(201).json({ ok: true, rollCount: (existingCount || 0) + 1 });
+    } catch (err) {
+      console.error("POST /api/rooms/:code/posts failed:", err);
+      res.status(500).json({ error: "Something went wrong saving that post - try again." });
     }
-
-    const { count: existingCount } = await supabase
-      .from("posts")
-      .select("id", { count: "exact", head: true })
-      .eq("room_id", room.id);
-
-    const { error } = await supabase.from("posts").insert(post);
-    if (error) return res.status(500).json({ error: "Couldn't save that post." });
-
-    res.status(201).json({ ok: true, rollCount: (existingCount || 0) + 1 });
   });
 });
 
