@@ -29,6 +29,12 @@ const supabase = createClient(
 supabase.storage.createBucket(MEDIA_BUCKET, { public: true }).catch(() => {});
 
 const app = express();
+// Render (and most PaaS hosts) terminate TLS at the edge and proxy to the
+// app over plain HTTP - without this, req.protocol always reads "http",
+// which would hand out "http://" invite links. Camera access for the video
+// attachment requires a secure context, so a wrong scheme here silently
+// breaks recording for everyone except localhost.
+app.set("trust proxy", 1);
 app.use(express.json({ limit: "2mb" }));
 
 // ---------- Invite codes ----------
