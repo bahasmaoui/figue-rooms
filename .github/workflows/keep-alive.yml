@@ -1,0 +1,20 @@
+name: Keep Supabase awake
+
+# Supabase free projects auto-pause after 7 days with no database activity,
+# and won't wake themselves back up on the next request (unlike Render's own
+# sleep) - a manual dashboard click is required to resume them. This just
+# hits the app's health endpoint once a day, which runs a trivial database
+# query and resets that clock. Entirely free: this is a handful of seconds
+# of GitHub Actions time per day, nowhere near the free tier's limits.
+
+on:
+  schedule:
+    - cron: "0 14 * * *" # once a day; the exact time doesn't matter
+  workflow_dispatch: {} # lets you trigger it manually from the Actions tab too
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /api/health
+        run: curl -fsS --retry 3 --retry-delay 30 https://figue-rooms.onrender.com/api/health

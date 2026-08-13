@@ -14,7 +14,16 @@ deployed independently. The journal is untouched by any of this.
 - The moment the room's end time passes, it "develops": every post becomes
   visible to everyone, sorted chronologically. This is computed from the
   clock, not a background job — there's nothing to keep running.
-- No edits, no deletes, ever.
+- No edits, no deletes, ever (from participants - see "Backing up a room"
+  below for the one admin-only exception).
+- Videos are re-encoded server-side (h.264/aac mp4, capped at 1280px wide) on
+  upload. This keeps phone footage from eating the free storage quota and,
+  just as importantly, makes sure a clip recorded in one browser actually
+  plays back in whatever browser someone else opens the archive in later.
+  Recording is capped at 90 seconds client-side and 200MB server-side - the
+  90s figure is arbitrary and easy to change; the 200MB one is a real ceiling
+  (Render's free tier has ~512MB RAM, and the file sits fully in memory
+  before compression shrinks it).
 
 ## Local dev
 
@@ -44,3 +53,35 @@ See the deployment walkthrough your assistant gave you in chat. Short version:
 Render's free tier sleeps after inactivity and takes ~30-60s to wake back up
 on the first request — the room page shows a "waking up" message and retries
 automatically, so this is harmless, just slow the first time.
+
+Supabase free projects are a different story: they auto-pause after 7 days
+with **no database activity at all**, and won't wake themselves back up on
+the next request the way Render does - that needs a manual click in the
+Supabase dashboard. `.github/workflows/keep-alive.yml` pings `/api/health`
+once a day (via GitHub Actions, also free) specifically to prevent that,
+so a quiet room in between get-togethers doesn't quietly stop working.
+
+## Backing up a room (and reclaiming its storage)
+
+Once a room has developed, you can pull everything - every post, every
+video, every drawing - down to your own computer:
+
+```
+npm run backup -- <invite-code>
+```
+
+This writes `backups/<code>-<room-name>/posts.json` plus a `media/` folder
+with every file, using the `ADMIN_KEY` and (optionally) `ROOMS_BASE_URL`
+from your local `.env`. Nothing on the server is touched.
+
+Once you've confirmed the backup looks right, you can free up that room's
+space on Supabase:
+
+```
+npm run backup -- <invite-code> --purge
+```
+
+This re-downloads (safe to run again), then asks you to type `YES` before
+permanently deleting that room and its files from Supabase - your local copy
+in `backups/` is unaffected either way. `backups/` is gitignored: it holds
+real photos/videos of real people, so it should never end up on GitHub.

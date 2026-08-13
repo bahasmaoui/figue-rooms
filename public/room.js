@@ -2,7 +2,7 @@
   "use strict";
 
   const NAME_KEY = "figue-rooms-name";
-  const MAX_RECORD_MS = 20000;
+  const MAX_RECORD_MS = 90000;
   const CODE = location.pathname.split("/").filter(Boolean).pop();
 
   const els = {
@@ -190,7 +190,10 @@
     els.camPreview.classList.add("hidden");
     if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
 
-    pendingVideoBlob = new Blob(recordedChunks, { type: "video/webm" });
+    // Safari's MediaRecorder actually encodes mp4, not webm - trust its own
+    // reported mimeType instead of assuming, so the upload's declared
+    // Content-Type matches what's really in the file.
+    pendingVideoBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || "video/webm" });
     els.reviewPreview.src = URL.createObjectURL(pendingVideoBlob);
     els.reviewPreview.classList.remove("hidden");
     els.discardVideoBtn.classList.remove("hidden");

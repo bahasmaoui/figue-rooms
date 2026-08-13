@@ -2,6 +2,10 @@ const express = require("express");
 const multer = require("multer");
 const crypto = require("crypto");
 const path = require("path");
+const os = require("os");
+const fs = require("fs/promises");
+const { execFile } = require("child_process");
+const ffmpegPath = require("ffmpeg-static");
 const { createClient } = require("@supabase/supabase-js");
 
 const PORT = process.env.PORT || 4300;
@@ -112,9 +116,13 @@ app.get("/api/rooms/:code", async (req, res) => {
 });
 
 // ---------- Post into a room (public, blind) ----------
+// 200MB bounds worst-case memory use (the file sits fully in RAM - see
+// compressVideo below - before compression shrinks it, and Render's free
+// tier has ~512MB total), not storage: raw browser recordings capped at
+// ROOM_MAX_RECORD_MS (see public/room.js) come in far under this.
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 60 * 1024 * 1024 },
+  limits: { fileSize: 200 * 1024 * 1024 },
 }).fields([
   { name: "video", maxCount: 1 },
   { name: "image", maxCount: 1 },
@@ -129,21 +137,84 @@ function toEmbedUrl(spotifyUrl) {
   return `https://open.spotify.com/embed/${kind}/${id}`;
 }
 
-const VIDEO_EXT_BY_SUBTYPE = { webm: "webm", mp4: "mp4", ogg: "ogv", quicktime: "mov" };
 const IMAGE_EXT_BY_SUBTYPE = { png: "png", jpeg: "jpg", jpg: "jpg", gif: "gif", webp: "webp" };
 function extFor(mimetype, table, fallback) {
   const subtype = (mimetype || "").split("/")[1]?.split(";")[0];
   return table[subtype] || fallback;
 }
 
-async function uploadToBucket(roomId, file, table, fallbackExt) {
-  const ext = extFor(file.mimetype, table, fallbackExt);
+function runFfmpeg(args) {
+  return new Promise((resolve, reject) => {
+    execFile(ffmpegPath, args, { timeout: 55000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) return reject(new Error(stderr?.slice(-500) || err.message));
+      resolve();
+    });
+  });
+}
+
+// Re-encodes to a modest, consistent H.264/AAC mp4 - shrinks phone-camera
+// footage considerably (helps the free Supabase storage quota go further)
+// and, just as importantly, normalizes format: without this, a video
+// recorded in Safari might not play back in whatever browser someone
+// else opens the archive in later.
+async function compressVideo(buffer) {
+  const inPath = path.join(os.tmpdir(), `${crypto.randomUUID()}-in`);
+  const outPath = path.join(os.tmpdir(), `${crypto.randomUUID()}-out.mp4`);
+  await fs.writeFile(inPath, buffer);
+  try {
+    await runFfmpeg([
+      "-y",
+      "-i", inPath,
+      "-vf", "scale='min(1280,iw)':-2",
+      "-c:v", "libx264",
+      "-preset", "veryfast",
+      "-crf", "27",
+      "-c:a", "aac",
+      "-b:a", "96k",
+      "-movflags", "+faststart",
+      outPath,
+    ]);
+    return await fs.readFile(outPath);
+  } finally {
+    await fs.rm(inPath, { force: true });
+    await fs.rm(outPath, { force: true });
+  }
+}
+
+async function uploadVideoToBucket(roomId, file) {
+  let buffer = file.buffer;
+  let contentType = "video/mp4";
+  let ext = "mp4";
+  try {
+    buffer = await compressVideo(file.buffer);
+  } catch (err) {
+    console.error("video compression failed, uploading original instead:", err.message);
+    contentType = file.mimetype;
+    ext = extFor(file.mimetype, { webm: "webm", mp4: "mp4", ogg: "ogv", quicktime: "mov" }, "webm");
+  }
+  const objectPath = `${roomId}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage.from(MEDIA_BUCKET).upload(objectPath, buffer, { contentType });
+  if (error) throw error;
+  return supabase.storage.from(MEDIA_BUCKET).getPublicUrl(objectPath).data.publicUrl;
+}
+
+async function uploadImageToBucket(roomId, file) {
+  const ext = extFor(file.mimetype, IMAGE_EXT_BY_SUBTYPE, "png");
   const objectPath = `${roomId}/${crypto.randomUUID()}.${ext}`;
   const { error } = await supabase.storage
     .from(MEDIA_BUCKET)
     .upload(objectPath, file.buffer, { contentType: file.mimetype });
   if (error) throw error;
   return supabase.storage.from(MEDIA_BUCKET).getPublicUrl(objectPath).data.publicUrl;
+}
+
+// Supabase public URLs look like ".../storage/v1/object/public/<bucket>/<path>" -
+// pull <path> back out so admin room-deletion can also clean up the files.
+function storagePathFromUrl(url) {
+  if (!url) return null;
+  const marker = `/object/public/${MEDIA_BUCKET}/`;
+  const idx = url.indexOf(marker);
+  return idx === -1 ? null : decodeURIComponent(url.slice(idx + marker.length));
 }
 
 app.post("/api/rooms/:code/posts", (req, res) => {
@@ -170,14 +241,14 @@ app.post("/api/rooms/:code/posts", (req, res) => {
         post.title = (req.body.title || "").trim().slice(0, 120);
         post.content_text = (req.body.contentText || "").trim().slice(0, 4000);
         const videoFile = req.files?.video?.[0];
-        if (videoFile) post.video_url = await uploadToBucket(room.id, videoFile, VIDEO_EXT_BY_SUBTYPE, "webm");
+        if (videoFile) post.video_url = await uploadVideoToBucket(room.id, videoFile);
         if (!post.content_text && !post.video_url) {
           return res.status(400).json({ error: "Write something or attach a video." });
         }
       } else if (type === "drawing") {
         const imageFile = req.files?.image?.[0];
         if (!imageFile) return res.status(400).json({ error: "A drawing needs image data." });
-        post.image_url = await uploadToBucket(room.id, imageFile, IMAGE_EXT_BY_SUBTYPE, "png");
+        post.image_url = await uploadImageToBucket(room.id, imageFile);
         post.caption = (req.body.caption || "").trim().slice(0, 160);
       } else if (type === "song") {
         const embedUrl = toEmbedUrl(req.body.spotifyUrl);
@@ -219,24 +290,73 @@ app.get("/api/rooms/:code/archive", async (req, res) => {
 
   if (error) return res.status(500).json({ error: "Couldn't load the archive." });
 
+  res.json({ name: room.name, endsAt: room.ends_at, posts: posts.map(mapPost) });
+});
+
+function mapPost(p) {
+  return {
+    id: p.id,
+    authorName: p.author_name,
+    type: p.type,
+    title: p.title,
+    contentText: p.content_text,
+    videoUrl: p.video_url,
+    imageUrl: p.image_url,
+    caption: p.caption,
+    spotifyUrl: p.spotify_url,
+    embedUrl: p.embed_url,
+    lyric: p.lyric,
+    createdAt: p.created_at,
+  };
+}
+
+// ---------- Admin: back up a developed room, then optionally reclaim its storage ----------
+app.get("/api/admin/rooms/:code/export", requireAdmin, async (req, res) => {
+  const room = await getRoomByCode(req.params.code);
+  if (!room) return res.status(404).json({ error: "Room not found." });
+  if (!isDeveloped(room)) return res.status(403).json({ error: "This roll hasn't developed yet." });
+
+  const { data: posts, error } = await supabase
+    .from("posts")
+    .select("*")
+    .eq("room_id", room.id)
+    .order("created_at", { ascending: true });
+  if (error) return res.status(500).json({ error: "Couldn't load posts." });
+
   res.json({
     name: room.name,
+    inviteCode: room.invite_code,
+    createdAt: room.created_at,
     endsAt: room.ends_at,
-    posts: posts.map((p) => ({
-      id: p.id,
-      authorName: p.author_name,
-      type: p.type,
-      title: p.title,
-      contentText: p.content_text,
-      videoUrl: p.video_url,
-      imageUrl: p.image_url,
-      caption: p.caption,
-      spotifyUrl: p.spotify_url,
-      embedUrl: p.embed_url,
-      lyric: p.lyric,
-      createdAt: p.created_at,
-    })),
+    posts: posts.map(mapPost),
   });
+});
+
+app.delete("/api/admin/rooms/:code", requireAdmin, async (req, res) => {
+  const room = await getRoomByCode(req.params.code);
+  if (!room) return res.status(404).json({ error: "Room not found." });
+  if (!isDeveloped(room)) {
+    return res.status(403).json({ error: "This roll hasn't developed yet - back it up after it develops." });
+  }
+
+  const { data: posts } = await supabase.from("posts").select("video_url, image_url").eq("room_id", room.id);
+  const paths = (posts || []).flatMap((p) => [storagePathFromUrl(p.video_url), storagePathFromUrl(p.image_url)]).filter(Boolean);
+  if (paths.length) await supabase.storage.from(MEDIA_BUCKET).remove(paths);
+
+  const { error } = await supabase.from("rooms").delete().eq("id", room.id);
+  if (error) return res.status(500).json({ error: "Couldn't delete the room." });
+
+  res.json({ ok: true, deletedPosts: (posts || []).length, deletedFiles: paths.length });
+});
+
+// Supabase free projects auto-pause after 7 days with no database activity,
+// and (unlike Render's own sleep) won't wake themselves back up on the next
+// request - a manual dashboard click is required. A scheduled ping at this
+// endpoint (see .github/workflows/keep-alive.yml) touches the database just
+// enough to reset that clock, for free, so a quiet room doesn't quietly break.
+app.get("/api/health", async (req, res) => {
+  const { error } = await supabase.from("rooms").select("id", { head: true, count: "exact" });
+  res.status(error ? 500 : 200).json({ ok: !error, time: new Date().toISOString() });
 });
 
 async function getRoomByCode(code) {
