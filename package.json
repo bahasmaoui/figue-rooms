@@ -1,0 +1,17 @@
+{
+  "name": "figue-rooms",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Disposable-camera-style shared rooms: post blind, everything unlocks together when the room develops. Fully separate from the figue journal app.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "postinstall": "node scripts/vendor-libs.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "express": "^4.19.2",
+    "multer": "^2.2.0",
+    "qrcode-generator": "^1.4.4"
+  }
+}

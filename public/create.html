@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>rooms. — create</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>%F0%9F%93%B7</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/rooms.css" />
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">📷 rooms<span class="dot">.</span></div>
+
+  <div class="card" id="gate-card">
+    <h1>Enter your admin key</h1>
+    <p class="hint">Only you should have this. It's the ADMIN_KEY you set as an environment variable when you deployed.</p>
+    <label for="gate-key">Admin key</label>
+    <input type="password" id="gate-key" autocomplete="off" />
+    <button class="btn btn-amber" id="gate-submit" type="button">Unlock</button>
+    <p class="error-msg" id="gate-error"></p>
+  </div>
+
+  <div class="card hidden" id="form-card">
+    <h1>Create a room</h1>
+    <p class="hint">Give it a name and pick when it develops. Everyone with the link can post blind until then.</p>
+    <label for="room-name">Room name</label>
+    <input type="text" id="room-name" placeholder="e.g. Sam's birthday" maxlength="80" />
+    <label for="room-ends">Develops at</label>
+    <input type="datetime-local" id="room-ends" />
+    <button class="btn btn-amber" id="create-submit" type="button">Create room</button>
+    <p class="error-msg" id="form-error"></p>
+  </div>
+
+  <div class="card hidden" id="result-card">
+    <h1 id="result-title">Room created!</h1>
+    <p class="hint">Send this link to whoever you want in the room. Anyone who has it can join and post.</p>
+    <div class="invite-box">
+      <div class="invite-qr" id="invite-qr"></div>
+      <span class="invite-link" id="invite-link"></span>
+      <button class="btn btn-ghost" id="copy-link" type="button" style="margin-top:0;">Copy link</button>
+    </div>
+    <button class="btn btn-amber" id="another-room" type="button">Create another room</button>
+  </div>
+</div>
+
+<script src="/vendor/qrcode/qrcode.js"></script>
+<script src="/create.js"></script>
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>rooms.</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>%F0%9F%93%B7</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/rooms.css" />
+</head>
+<body>
+<div class="wrap">
+  <div class="brand" id="room-title">📷 rooms<span class="dot">.</span></div>
+
+  <div class="card" id="loading-card">
+    <p class="hint" id="loading-text">Waking up the room… this can take up to a minute if it's been quiet for a while.</p>
+  </div>
+
+  <div class="card hidden" id="notfound-card">
+    <h1>Room not found</h1>
+    <p class="hint">Double-check the link your friend sent you.</p>
+  </div>
+
+  <div class="card hidden" id="name-card">
+    <h1 id="name-room-title">Join this room</h1>
+    <p class="hint">Pick a display name. It's remembered in this browser so you won't be asked again.</p>
+    <label for="name-input">Your name</label>
+    <input type="text" id="name-input" maxlength="40" placeholder="e.g. Sam" />
+    <button class="btn btn-amber" id="name-submit" type="button">Join</button>
+    <p class="error-msg" id="name-error"></p>
+  </div>
+
+  <div class="card hidden" id="composer-card">
+    <h1 id="composer-room-title">Add to the roll</h1>
+    <p class="hint" id="composer-hint"></p>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-mode="note" type="button">📝 Text</button>
+      <button class="tab-btn" data-mode="drawing" type="button">🎨 Draw</button>
+      <button class="tab-btn" data-mode="song" type="button">🎵 Song</button>
+    </div>
+
+    <div class="composer-panel" data-panel="note">
+      <textarea id="note-text" maxlength="4000" placeholder="Write something for the roll…"></textarea>
+      <div id="cam-row" style="margin-top:10px;">
+        <button class="btn btn-ghost" id="record-btn" type="button" style="margin-top:0;">🎥 Attach a quick video</button>
+        <button class="btn btn-ghost hidden" id="stop-btn" type="button" style="margin-top:0;">⏹ Stop</button>
+        <span class="status-msg" id="rec-timer"></span>
+      </div>
+      <video id="cam-preview" class="cam-preview hidden" autoplay muted playsinline></video>
+      <video id="review-preview" class="cam-preview hidden" controls></video>
+      <button class="btn btn-ghost hidden" id="discard-video-btn" type="button">Remove video</button>
+    </div>
+
+    <div class="composer-panel hidden" data-panel="drawing">
+      <div class="draw-toolbar">
+        <div class="swatches" id="swatches"></div>
+        <button class="btn btn-ghost" id="clear-canvas-btn" type="button" style="margin-top:0; width:auto; padding:8px 12px;">Clear</button>
+      </div>
+      <canvas id="draw-canvas" class="draw-canvas" width="640" height="480"></canvas>
+      <input type="text" id="drawing-caption" maxlength="160" placeholder="Caption (optional)" style="margin-top:10px;" />
+    </div>
+
+    <div class="composer-panel hidden" data-panel="song">
+      <input type="text" id="song-url" placeholder="Paste a Spotify track / album / playlist link" />
+      <input type="text" id="song-caption" maxlength="160" placeholder="Caption (optional)" style="margin-top:10px;" />
+      <textarea id="song-lyric" maxlength="240" placeholder="A lyric that stuck with you… (optional)" style="margin-top:10px; min-height:60px;"></textarea>
+    </div>
+
+    <button class="btn btn-amber" id="post-submit" type="button">Add to the roll</button>
+    <p class="error-msg" id="composer-error"></p>
+  </div>
+
+  <div class="card hidden" id="confirm-card">
+    <div class="confirm">
+      <div class="icon">📸</div>
+      <h1>Added to the roll!</h1>
+      <p class="hint" id="confirm-text"></p>
+      <button class="btn btn-amber" id="post-another" type="button">Add another</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="developed-header-card">
+    <div class="archive-header">
+      <h1 id="archive-title"></h1>
+      <span class="roll-count" id="archive-count"></span>
+    </div>
+  </div>
+
+  <div id="archive-list"></div>
+</div>
+
+<script src="/room.js"></script>
+</body>
+</html>
