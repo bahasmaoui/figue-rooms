@@ -180,6 +180,14 @@ async function compressVideo(buffer) {
       "-c:v", "libx264",
       "-preset", "veryfast",
       "-crf", "27",
+      // x264 sizes its thread pool and lookahead buffers off the host's
+      // reported CPU count, not the container's actual (much smaller) share
+      // on Render's free tier - left uncapped, that overshoots available
+      // memory on a box that reports many more cores than it really grants
+      // this container. Pinning both keeps the encoder's footprint small
+      // and predictable regardless of what the host claims.
+      "-threads", "1",
+      "-x264-params", "threads=1:lookahead-threads=1:sliced-threads=0:rc-lookahead=20",
       "-c:a", "aac",
       "-b:a", "96k",
       "-movflags", "+faststart",
